@@ -12,11 +12,13 @@ import sys
 # k - the variable for the k-inference algorithm
 def main(fname, k):
     S = inf.get_corpus(fname)
-    inf.k_RI(S, k)
+    A = inf.k_RI(S, k)
+    A.print_me()
 
 fname = sys.argv[1]
 k = sys.argv[2]
 main(fname, k)
+
 
 ################ TESTING ########################################
 S = ["Mary bakes cakes", "John bakes cakes", "Mary eats pies", "Mary bakes pies", "Mary bakes"]
@@ -53,3 +55,6 @@ aux_data = ["Judy gives bread", "Judy is giving bread", "Judy has given bread", 
             "Judy will have been being given bread",
             "Judy would be given bread", "Judy would be being given bread", "Judy would have been given bread",
             "Judy would have been being given bread"]
+
+#B = inf.k_RI(S, 0)
+#B.print_me()

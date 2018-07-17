@@ -11,6 +11,7 @@
 import copy
 import numpy as np
 
+
 def k_RI(S, k):
     # if S is empty, output the empty acceptor an halt
     if len(S) == 0:
@@ -24,9 +25,9 @@ def k_RI(S, k):
     ############# Initialization ##################
 
     A0 = PT_Acceptor(S)  # A0 is the prefix tree acceptor for S
-    partitions = [Partition(
-        [[n] for n in A0.nodes])]  # holds all the different partitions of A0 states - first the trivial partition
-    quotient_acceptors = []
+    partition = Partition(
+        [[n] for n in A0.nodes])  # holds all the different partitions of A0 states - first the trivial partition
+    quotient_acceptor = Quotient_Acceptor(A0, copy.deepcopy(partition))
 
     i = 0
 
@@ -34,31 +35,15 @@ def k_RI(S, k):
     while True:
 
         ####### Merging Data Initialization #########
-        quotient_acceptor = Quotient_Acceptor(A0, copy.deepcopy(partitions[i]))
-        quotient_acceptors.append(quotient_acceptor)
+        quotient_acceptor = Quotient_Acceptor(A0, copy.deepcopy(partition))
 
-        H = []
-        for (t0, x_0, y_0) in quotient_acceptor.edges:
-            for (t1, x_1, y_1) in quotient_acceptor.edges:
-                if t0 == t1:
-                    H.append(((x_0, x_1), (y_0, y_1)))
+        H = [((x_0, x_1), (y_0, y_1)) for (t0, x_0, y_0) in quotient_acceptor.edges for (t1, x_1, y_1) in
+             quotient_acceptor.edges if t0 == t1]
 
-        C = []  # list of matrices
+        C = [[[1 for y in quotient_acceptor.nodes] for x in quotient_acceptor.nodes]]  # list of matrices - first all 1s
 
-        for j in range(k + 2):
-            if j == 0:
-                c = []
-                for x in quotient_acceptor.nodes:
-                    c.append([])  # append row
-                    for y in quotient_acceptor.nodes:
-                        c[x].append(1)
-                C.append(c)
-            else:
-                c = []
-                for x in quotient_acceptor.nodes:
-                    c.append([])  # append row
-                    for y in quotient_acceptor.nodes:
-                        c[x].append(0)
+        for j in range(1, k + 2):
+                c = [[0 for y in quotient_acceptor.nodes] for x in quotient_acceptor.nodes]
 
                 c_prev = C[j - 1]
                 for (x_0, x_1), (y_0, y_1) in H:
@@ -67,7 +52,7 @@ def k_RI(S, k):
                 C.append(c)
 
         ########## Merging ###################
-        next_partition = Partition(copy.deepcopy(partitions[i].blocks))  # the next parition
+        next_partition = Partition(copy.deepcopy(partition.blocks))  # the next parition
         c = C[k]
         merged = False  # used to indicate if a merger has occurred
 
@@ -101,12 +86,11 @@ def k_RI(S, k):
             break
         else:
             i += 1
-            partitions.append(next_partition)
+            partition = next_partition
 
     ############# Termination #######################
-    f = i
 
-    A = Quotient_Acceptor(A0, partitions[f])
+    A = Quotient_Acceptor(A0, partition)
     A.print_me()
     return minimize(A, get_alphabet(S))
 
@@ -117,18 +101,14 @@ def k_RI(S, k):
 def zero_RI(S):
     ############# Initialization ##################
     A0 = PT_Acceptor(S)  # A0 is the prefix tree acceptor for S
-    partitions = [Partition([[n] for n in A0.nodes])]  # holds all the different partitions of A0 states - first the trivial partition
+    partition = Partition([[n] for n in A0.nodes])  # holds all the different partitions of A0 states - first the trivial partition
     alphabet = get_alphabet(S)
-
     reversed_edges = A0.get_reverse_edges()
 
-    s = {}  # dictionary that holds b-successors
-    p = {}  # dictionary that holds b-predecessors
-
-    for b in alphabet:
-        for q in A0.nodes:
-            s[(tuple([q]), b)] = A0.edges[(b, q)] if (b, q) in A0.edges else None
-            p[(tuple([q]), b)] = reversed_edges[(b, q)] if (b, q) in reversed_edges else None
+    s = {(tuple([q]), b): A0.edges[(b, q)] if (b, q) in A0.edges else None for b in alphabet for q in
+         A0.nodes}  # dictionary that holds b-successors
+    p = {(tuple([q]), b): reversed_edges[(b, q)] if (b, q) in reversed_edges else None for b in alphabet for q in
+         A0.nodes}  # dictionary that holds b-predecessors
 
     q0 = A0.is_accepting[0]
 
@@ -139,8 +119,6 @@ def zero_RI(S):
     while len(to_merge) != 0:
         (q1, q2) = to_merge.pop(0)
 
-        partition = partitions[i]
-
         b1 = partition.get_block_index_of_element(q1)
         b2 = partition.get_block_index_of_element(q2)
 
@@ -148,9 +126,9 @@ def zero_RI(S):
         block2 = partition.blocks[b2]
 
         if block1 != block2:
-            next_partition = Partition(copy.deepcopy(partitions[i].blocks))  # the next partition
+            next_partition = Partition(copy.deepcopy(partition.blocks))  # the next partition
             next_partition.merge_blocks(b1, b2)
-            partitions.append(next_partition)
+            partition = next_partition
 
             for b in alphabet:
                 update(block1, block2, b, s, to_merge)  # s-update
@@ -159,9 +137,7 @@ def zero_RI(S):
             i += 1
 
     ############### Termination ##########
-    f = i
-
-    return Quotient_Acceptor(A0, partitions[f])
+    return Quotient_Acceptor(A0, partition)
 
 
 # Note: s_p is the dictionary (b-successors or b-predecessors)
@@ -178,27 +154,17 @@ def update(block1, block2, b, s_p, to_merge):
 
         else:
             s_p[(tuple(block3), b)] = s_p[(tuple(block1), b)]
-            #del s_p[(tuple(block1), b)]
 
     elif (tuple(block2), b) in s_p and s_p[(tuple(block2), b)] is not None:
         s_p[(tuple(block3), b)] = s_p[(tuple(block2), b)]
-        #del s_p[(tuple(block2), b)]
 
     else:
         s_p[(tuple(block3), b)] = None
 
 
-    # Returns the alphabet (i.e. the list of words) from a list of strings S
+# Returns the alphabet (i.e. the list of words) from a list of strings S
 def get_alphabet(S):
-    alphabet = []
-    for s in S:
-        if s == "":
-            continue
-        tokens = s.split(" ")
-        for t in tokens:
-            if t not in alphabet:
-                alphabet.append(t)
-    return sorted(alphabet)
+    return sorted(list(set([t for s in S if s != "" for t in s.split(" ")])))
 
 
 # DFA Minimization using Equivalence Theorem
@@ -391,11 +357,7 @@ class PT_Acceptor:
 
     # used in zero-reversible inference
     def get_reverse_edges(self):
-        reverse = {}
-        for (t, n) in self.edges:
-            reverse[(t, self.edges[(t, n)])] = n
-
-        return reverse
+        return {(t, self.edges[(t, n)]): n for (t, n) in self.edges}
 
 
 # Quotient Acceptor Class
@@ -417,28 +379,15 @@ class Quotient_Acceptor:
         self.initial = self.get_initial()
 
     def get_nodes(self):
-        nodes = []
-        for block in self.pi.blocks:
-            new_node = len(nodes)
-            nodes.append(new_node)
-        return nodes
+        return [n for n in xrange(len(self.pi.blocks))]
 
     def get_edges(self):
-        edges = []
-        for (t, node) in self.A0.edges:
-            b1 = self.pi.get_block_index_of_element(node)
-            b2 = self.pi.get_block_index_of_element(self.A0.edges[(t, node)])
-            if (t, b1, b2) not in edges:
-                edges.append((t, b1, b2))
-        return edges
+        return list(set(
+            [(t, self.pi.get_block_index_of_element(node), self.pi.get_block_index_of_element(self.A0.edges[(t, node)]))
+             for (t, node) in self.A0.edges]))
 
     def get_accepting(self):
-        is_accepting = []
-        for a in self.A0.is_accepting:
-            b = self.pi.get_block_index_of_element(a)
-            if b not in is_accepting:
-                is_accepting.append(b)
-        return is_accepting
+        return list(set([self.pi.get_block_index_of_element(a) for a in self.A0.is_accepting]))
 
     def get_initial(self):
         init = self.A0.initial
@@ -508,10 +457,10 @@ def get_corpus(filename):
     return list(set(S))
 
 ############### EXPERIMENT #######################
-#fname = sys.argv[1]
-S = get_corpus("np_chunks.txt")
-#print S
-print len(S)
-#print S
-#A = k_RI(S, 2)
-#A.print_me()
+# fname = sys.argv[1]
+# S = get_corpus("np_chunks.txt")
+# print S
+# print len(S)
+# print S
+# A = k_RI(S, 2)
+# A.print_me()
